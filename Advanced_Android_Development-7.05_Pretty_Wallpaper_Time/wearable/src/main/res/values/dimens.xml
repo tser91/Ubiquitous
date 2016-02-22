@@ -8,5 +8,5 @@
 
     <dimen name="digital_x_offset">40dp</dimen>
     <dimen name="digital_x_offset_round">50dp</dimen>
-    <dimen name="digital_y_offset">90dp</dimen>
+    <dimen name="digital_y_offset">75dp</dimen>
 </resources>

@@ -2,12 +2,13 @@ apply plugin: 'com.android.application'
 
 
 android {
-    compileSdkVersion 23
+    compileSdkVersion 21
     buildToolsVersion "21.1.2"
+
     defaultConfig {
-        applicationId 'com.example.android.sunshine.app.wear'
+        applicationId "com.example.android.sunshine.app"
         minSdkVersion 21
-        targetSdkVersion 23
+        targetSdkVersion 21
         versionCode 1
         versionName "1.0"
     }
@@ -16,8 +17,6 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
-    }
-    productFlavors {
     }
 }
 

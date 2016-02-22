@@ -102,6 +102,25 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
     public SunshineSyncAdapter(Context context, boolean autoInitialize) {
         super(context, autoInitialize);
 
+    }
+
+    @Override
+    public void onPerformSync(Account account, Bundle extras, String authority, ContentProviderClient provider, SyncResult syncResult) {
+        Log.d(LOG_TAG, "Starting sync");
+        String locationQuery = Utility.getPreferredLocation(getContext());
+
+        // These two need to be declared outside the try/catch
+        // so that they can be closed in the finally block.
+        HttpURLConnection urlConnection = null;
+        BufferedReader reader = null;
+
+        // Will contain the raw JSON response as a string.
+        String forecastJsonStr = null;
+
+        String format = "json";
+        String units = "metric";
+        int numDays = 14;
+
         googleApiClient = new GoogleApiClient.Builder(getContext())
                 .addConnectionCallbacks(new GoogleApiClient.ConnectionCallbacks() {
                     @Override
@@ -123,26 +142,6 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                 .addApi(Wearable.API)
                 .build();
         googleApiClient.connect();
-    }
-
-    @Override
-    public void onPerformSync(Account account, Bundle extras, String authority, ContentProviderClient provider, SyncResult syncResult) {
-        Log.d(LOG_TAG, "Starting sync");
-        String locationQuery = Utility.getPreferredLocation(getContext());
-
-        // These two need to be declared outside the try/catch
-        // so that they can be closed in the finally block.
-        HttpURLConnection urlConnection = null;
-        BufferedReader reader = null;
-
-        // Will contain the raw JSON response as a string.
-        String forecastJsonStr = null;
-
-
-
-        String format = "json";
-        String units = "metric";
-        int numDays = 14;
 
         try {
             // Construct the URL for the OpenWeatherMap query
@@ -382,7 +381,7 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
             PutDataMapRequest putDataMapRequest = PutDataMapRequest.create("/temperatures");
             putDataMapRequest.getDataMap().putDouble(OWM_MAX, maxTempToday);
             putDataMapRequest.getDataMap().putDouble(OWM_MIN, minTempToday);
-            putDataMapRequest.getDataMap().putLong("Time",System.currentTimeMillis());
+            putDataMapRequest.getDataMap().putLong("Time", System.currentTimeMillis());
 
             // Reference: http://stackoverflow.com/questions/8417034/how-to-make-bitmap-compress-without-change-the-bitmap-size
             Bitmap bitmap = BitmapFactory.decodeResource(getContext().getResources(),
@@ -396,7 +395,12 @@ public class SunshineSyncAdapter extends AbstractThreadedSyncAdapter {
                     .setResultCallback(new ResultCallback<DataApi.DataItemResult>() {
                         @Override
                         public void onResult(DataApi.DataItemResult dataItemResult) {
-                            System.out.print("Result is " + dataItemResult.getStatus());
+                            if (!dataItemResult.getStatus().isSuccess()) {
+                                Log.e(LOG_TAG, "Cannot send data " + dataItemResult.getStatus().getStatusCode());
+                                 }
+                            else {
+                                System.out.print("Data sent succesfully ");
+                            }
                         }
                     });
 

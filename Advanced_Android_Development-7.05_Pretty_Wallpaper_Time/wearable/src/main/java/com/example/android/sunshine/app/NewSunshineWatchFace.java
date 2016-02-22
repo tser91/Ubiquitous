@@ -30,6 +30,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
@@ -40,7 +41,6 @@ import android.util.Log;
 import android.view.SurfaceHolder;
 import android.view.WindowInsets;
 
-import com.example.saboriot.wearable.R;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -65,8 +65,6 @@ import java.util.concurrent.TimeUnit;
  * low-bit ambient mode, the text is drawn without anti-aliasing in ambient mode.
  */
 public class NewSunshineWatchFace extends CanvasWatchFaceService{
-
-    private GoogleApiClient mGoogleApiClient;
 
     private static final String TAG = "WatchFace";
 
@@ -120,6 +118,8 @@ public class NewSunshineWatchFace extends CanvasWatchFaceService{
         Paint mLowPaint;
         boolean mAmbient;
         Time mTime;
+        private GoogleApiClient mGoogleApiClient;
+
         final BroadcastReceiver mTimeZoneReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -323,6 +323,7 @@ public class NewSunshineWatchFace extends CanvasWatchFaceService{
         public void onDraw(Canvas canvas, Rect bounds) {
 
             float spacing = 10;
+            int bitmapSize = 50;
 
             width = bounds.width();
             height = bounds.height();
@@ -351,23 +352,28 @@ public class NewSunshineWatchFace extends CanvasWatchFaceService{
             canvas.drawText(text, bounds.centerX() - mLowPaint.measureText(text)/2, yCoordenate, mLowPaint);
             yCoordenate += spacing * 3/2;
 
-            // remove this!:
-            minTemp = -3;
             if (maxTemp > minTemp) {
                 // Draw the Separating line
                 float halfLine = (bounds.centerX() - mXOffset) / 2;
                 canvas.drawLine(bounds.centerX() - halfLine, yCoordenate, bounds.centerX() + halfLine, yCoordenate, mLowPaint);
-                yCoordenate += mLowPaint.getTextSize() + spacing / 2;
+                yCoordenate += mLowPaint.getTextSize() + spacing * 2;
 
                 // Draw the temperature range
                 text = String.format("%d°   %d°", maxTemp, minTemp);
-                canvas.drawText(text, bounds.centerX() - mLowPaint.measureText(text) / 2, yCoordenate, mLowPaint);
+                if (!isInAmbientMode() && weatherBitmap != null) {
+                    canvas.drawText(text, bounds.centerX() - (mLowPaint.measureText(text) + bitmapSize + spacing) / 2 + bitmapSize + spacing,
+                            yCoordenate, mLowPaint);
+                }
+                else {
+                    canvas.drawText(text, bounds.centerX() - mLowPaint.measureText(text) / 2, yCoordenate, mLowPaint);
+                }
             }
 
             // Scale the bitmap to fit the device
-            if (weatherBitmap != null) {
-                weatherBitmap = Bitmap.createScaledBitmap(weatherBitmap, 40, 40, true);
-                canvas.drawBitmap(weatherBitmap, bounds.centerX() - mLowPaint.measureText(text) / 2 - 40, yCoordenate, null);
+            if (weatherBitmap != null && !isInAmbientMode()) {
+                weatherBitmap = Bitmap.createScaledBitmap(weatherBitmap, bitmapSize, bitmapSize, true);
+                canvas.drawBitmap(weatherBitmap, bounds.centerX() - (mLowPaint.measureText(text) + bitmapSize + spacing) / 2,
+                        yCoordenate - (bitmapSize/2 + mLowPaint.getTextSize()/2), null);
             }
         }
 
@@ -421,6 +427,7 @@ public class NewSunshineWatchFace extends CanvasWatchFaceService{
             for (DataEvent event : dataEventBuffer) {
                 if (event.getType() == DataEvent.TYPE_CHANGED) {
                     // DataItem changed
+                    System.out.println("PASA POR ACA 00 "+ event.getDataItem().getUri().getPath());
                     if ( event.getDataItem().getUri().getPath().equals("/temperatures"))
                     {
                         DataItem item = event.getDataItem();
@@ -428,33 +435,33 @@ public class NewSunshineWatchFace extends CanvasWatchFaceService{
                         maxTemp = (int) dataMap.getDouble(OWM_MAX);
                         minTemp = (int) dataMap.getDouble(OWM_MIN);
                         Asset profileAsset = dataMap.getAsset(WEATHER_IMAGE);
-                        weatherBitmap = loadBitmapFromAsset(profileAsset);
+                        new loadBitmapFromAsset().execute(profileAsset);
                     }
 
                 }
             }
         }
 
-        public Bitmap loadBitmapFromAsset(Asset asset) {
-            if (asset == null) {
-                throw new IllegalArgumentException("Asset must be non-null");
-            }
-            ConnectionResult result =
-                    mGoogleApiClient.blockingConnect(TIMEOUT_MS, TimeUnit.MILLISECONDS);
-            if (!result.isSuccess()) {
-                return null;
-            }
-            // convert asset into a file descriptor and block until it's ready
-            InputStream assetInputStream = Wearable.DataApi.getFdForAsset(
-                    mGoogleApiClient, asset).await().getInputStream();
-            mGoogleApiClient.disconnect();
+        // Ref: https://developers.google.com/android/guides/api-client#Sync
+        private class loadBitmapFromAsset extends AsyncTask {
 
-            if (assetInputStream == null) {
-                Log.w("Sunshine", "Requested an unknown Asset.");
-                return null;
+            @Override
+            protected Bitmap doInBackground(Object[] param) {
+                Asset asset = (Asset)param[0];
+                ConnectionResult result = mGoogleApiClient.blockingConnect(500, TimeUnit.MILLISECONDS);
+                if (!result.isSuccess()) {
+                    return null;
+                }
+                InputStream assetInputStream = Wearable.DataApi.getFdForAsset(mGoogleApiClient, asset).await().getInputStream();
+                mGoogleApiClient.disconnect();
+
+                if (assetInputStream == null) {
+                    return null;
+                }
+                // decode the stream into a bitmap
+                weatherBitmap = BitmapFactory.decodeStream(assetInputStream);
+                return weatherBitmap;
             }
-            // decode the stream into a bitmap
-            return BitmapFactory.decodeStream(assetInputStream);
         }
 
         @Override
